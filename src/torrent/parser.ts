@@ -1,21 +1,20 @@
-import type { Torrent } from './types/torrent.type.js'
+import type { ParsedTorrent } from './types/parsedTorrent.type.js'
+import type { RawTorrent } from './types/rawTorrent.type.js'
+import type { ValidatedTorrentInfo } from './types/validatedTorrentInfo.type.js'
 
-type RawTorrent = {
-  announce?: Uint8Array
-  info?: {
-    name?: Uint8Array
-    length?: number
-    'piece length'?: number
-    pieces?: Uint8Array
-  }
-}
-
-export function parseTorrent(raw: RawTorrent): Torrent {
+export function parseTorrent(raw: RawTorrent): ParsedTorrent {
   if (!raw.info) throw new Error('Invalid torrent missing info')
 
   const info = raw.info
 
   if (!info.name || !info['piece length'] || !info.pieces) throw new Error('Invalid torrent metadata')
+
+  const validInfo: ValidatedTorrentInfo = {
+    name: info.name,
+    length: info.length,
+    'piece length': info['piece length'],
+    pieces: info.pieces,
+  }
 
   return {
     announce: raw.announce ? Buffer.from(raw.announce).toString() : '',
@@ -28,7 +27,7 @@ export function parseTorrent(raw: RawTorrent): Torrent {
 
     pieces: splitPiece(Buffer.from(info.pieces)),
 
-    rawInfo: info,
+    rawInfo: validInfo,
   }
 }
 
