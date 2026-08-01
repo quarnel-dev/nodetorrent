@@ -1,3 +1,7 @@
+import { loadTorrent } from './loader.js'
+
 import { consola } from 'consola'
 
-consola.log('Hello World')
+const t = await loadTorrent('./test.torrent')
+
+consola.log(t)
