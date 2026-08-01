@@ -4,4 +4,6 @@ export interface Torrent {
   length: number
   pieceLength: number
   pieces: Buffer[]
+
+  rawInfo: unknown
 }

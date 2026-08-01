@@ -27,6 +27,8 @@ export function parseTorrent(raw: RawTorrent): Torrent {
     pieceLength: info['piece length'],
 
     pieces: splitPiece(Buffer.from(info.pieces)),
+
+    rawInfo: info,
   }
 }
 
