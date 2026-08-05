@@ -28,16 +28,28 @@ export async function getPeers(req: TrackerRequest): Promise<Peer[]> {
   const lib = req.announce.startsWith('https') ? https : http
 
   const data = await new Promise<Buffer>((resolve, reject) => {
-    lib.get(url, (res) => {
+    const req = lib.get(url, (res) => {
+      if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+        return reject(new Error(`HTTP status code ${res.statusCode}`))
+      }
+
       const chunks: Buffer[] = []
       res.on('data', (chunk) => chunks.push(chunk))
       res.on('end', () => resolve(Buffer.concat(chunks)))
       res.on('error', reject)
     })
+
+    req.on('error', reject)
   })
 
   const dData = b.decode(data)
-  const peers = parsePeers(Buffer.from(dData.peers))
+
+  if (dData['failure reason']) {
+    throw new Error(`Tracker error: ${dData['failure reason'].toString()}`)
+  }
+
+  const peersBuf = Buffer.isBuffer(dData.peers) ? dData.peers : Buffer.from(dData.peers)
+  const peers = parsePeers(peersBuf)
 
   return peers
 }
