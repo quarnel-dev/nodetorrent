@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { connect } from 'node:net'
 
-import { buildHandshake, parseMessages } from './protocol.js'
+import { buildHandshake, parseMessages, buildInterested, buildRequest } from './protocol.js'
 
 import { MSG } from './msg.const.js'
 
@@ -32,5 +32,9 @@ export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: B
 
   socket.on('close', () => event.emit('close'))
 
-  return event
+  return {
+    on: event.on.bind(event),
+    sendInterested: () => socket.write(buildInterested()),
+    sendRequest: (index: number, begin: number, length: number) => socket.write(buildRequest(index, begin, length)),
+  }
 }

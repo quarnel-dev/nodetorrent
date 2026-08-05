@@ -21,3 +21,16 @@ export function parseMessages(buffer: Buffer): ParseResult {
 
   return { messages, rest: Buffer.from(buffer) }
 }
+
+export function buildInterested(): Buffer {
+  return Buffer.from([0, 0, 0, 1, 2])
+}
+
+export function buildRequest(index: number, begin: number, length: number): Buffer {
+  const payload = Buffer.alloc(12)
+  payload.writeUInt32BE(index, 0)
+  payload.writeUInt32BE(begin, 4)
+  payload.writeUInt32BE(length, 8)
+
+  return Buffer.concat([Buffer.from([0, 0, 0, 13, 6]), payload])
+}
