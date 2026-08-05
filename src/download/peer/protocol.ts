@@ -9,17 +9,25 @@ export function parseMessages(buffer: Buffer): ParseResult {
 
   while (true) {
     if (buffer.length < 4) break
+
     const len = buffer.readUInt32BE(0)
+
+    if (len === 0) {
+      buffer = buffer.subarray(4)
+      continue
+    }
+
     if (buffer.length < 4 + len) break
 
     const id = buffer[4]
     const payload = buffer.subarray(5, 4 + len)
+
     messages.push({ id, payload })
 
     buffer = buffer.subarray(4 + len)
   }
 
-  return { messages, rest: Buffer.from(buffer) }
+  return { messages, rest: buffer }
 }
 
 export function buildInterested(): Buffer {

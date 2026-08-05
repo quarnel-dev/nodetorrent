@@ -2,7 +2,6 @@ import { EventEmitter } from 'node:events'
 import { connect } from 'node:net'
 
 import { buildHandshake, parseMessages, buildInterested, buildRequest } from './protocol.js'
-
 import { MSG } from './msg.const.js'
 
 export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: Buffer) {
@@ -10,13 +9,26 @@ export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: B
   const event = new EventEmitter()
 
   let buffer: Buffer = Buffer.alloc(0)
+  let handshaked = false
 
   socket.on('connect', () => {
-    socket.write(buildHandshake(infoHash, peerId))
+    event.emit('connect')
+
+    const hs = buildHandshake(infoHash, peerId)
+    socket.write(hs)
+
+    socket.write(buildInterested())
   })
 
   socket.on('data', (data: Buffer) => {
     buffer = Buffer.concat([buffer, data])
+
+    if (!handshaked) {
+      if (buffer.length < 68) return
+
+      handshaked = true
+      buffer = buffer.subarray(68)
+    }
 
     const { messages, rest } = parseMessages(buffer)
     buffer = rest
@@ -29,12 +41,10 @@ export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: B
   })
 
   socket.on('error', (e) => event.emit('error', e))
-
   socket.on('close', () => event.emit('close'))
 
   return {
     on: event.on.bind(event),
-    sendInterested: () => socket.write(buildInterested()),
     sendRequest: (index: number, begin: number, length: number) => socket.write(buildRequest(index, begin, length)),
   }
 }

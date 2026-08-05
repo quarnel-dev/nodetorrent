@@ -5,7 +5,7 @@ export interface Torrent {
   name: string
   length: number
   pieceLength: number
-  pieces: Buffer[]
+  pieceHashes: Buffer[]
 
   rawInfo: ValidatedTorrentInfo
 

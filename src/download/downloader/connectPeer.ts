@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
-
+import { consola } from 'consola'
 import { createPeer } from '../peer/index.js'
-
 import { BLOCK_SIZE } from './blockSize.const.js'
 
 import type { FileHandle } from 'node:fs/promises'
@@ -13,11 +12,35 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
 
   const pieceBuffers = new Map<number, Buffer[]>()
 
-  p.on('unchoke', () => {
-    const index = queue.shift()
-    if (index === undefined) return
+  let currentPieceIndex: number | undefined
+  let currentOffset = 0
 
-    p.sendRequest(index, 0, BLOCK_SIZE)
+  const getPieceSize = (index: number) => {
+    return index === options.pieceHashes.length - 1
+      ? options.length - options.pieceLength * (options.pieceHashes.length - 1)
+      : options.pieceLength
+  }
+
+  const requestNextBlock = () => {
+    if (currentPieceIndex === undefined) {
+      currentPieceIndex = queue.shift()
+      currentOffset = 0
+    }
+
+    if (currentPieceIndex === undefined) return
+
+    const pieceSize = getPieceSize(currentPieceIndex)
+    const blockLength = Math.min(BLOCK_SIZE, pieceSize - currentOffset)
+
+    p.sendRequest(currentPieceIndex, currentOffset, blockLength)
+  }
+
+  p.on('connect', () => consola.info(`Connected to ${peer.ip}:${peer.port}`))
+  p.on('close', () => consola.warn(`Disconnected from ${peer.ip}:${peer.port}`))
+
+  p.on('unchoke', () => {
+    consola.info(`Peer ${peer.ip} unchoked`)
+    requestNextBlock()
   })
 
   p.on('piece', (payload: Buffer) => {
@@ -28,11 +51,7 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
     if (!pieceBuffers.has(index)) pieceBuffers.set(index, [])
     pieceBuffers.get(index)!.push(data)
 
-    const pieceSize =
-      index === options.pieceHashes.length - 1
-        ? options.length - options.pieceLength * (options.pieceHashes.length - 1)
-        : options.pieceLength
-
+    const pieceSize = getPieceSize(index)
     const collected = pieceBuffers.get(index)!.reduce((acc, b) => acc + b.length, 0)
 
     if (collected >= pieceSize) {
@@ -40,18 +59,23 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
       const hash = createHash('sha1').update(piece).digest()
 
       if (!hash.equals(options.pieceHashes[index])) {
+        consola.error(`Hash mismatch for piece ${index}`)
+        pieceBuffers.delete(index)
         queue.push(index)
-        return
+      } else {
+        file.write(piece, 0, piece.length, index * options.pieceLength)
+        consola.success(`Piece ${index} collected & saved (${collected}/${pieceSize})`)
       }
 
-      file.write(piece, 0, piece.length, index * options.pieceLength)
-
-      const next = queue.shift()
-      if (next !== undefined) p.sendRequest(next, 0, BLOCK_SIZE)
+      currentPieceIndex = undefined
+      requestNextBlock()
+    } else {
+      currentOffset += data.length
+      requestNextBlock()
     }
   })
 
-  p.on('error', () => {})
-
-  p.sendInterested()
+  p.on('error', (e) => {
+    consola.warn(`Peer ${peer.ip} error: ${e.message}`)
+  })
 }

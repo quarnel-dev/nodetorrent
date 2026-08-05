@@ -11,7 +11,7 @@ import type { TrackerRequest } from './types/trackerRequest.type.js'
 import { parsePeers } from './parsePeers.js'
 
 export async function getPeers(req: TrackerRequest): Promise<Peer[]> {
-  const peerId = Buffer.concat([Buffer.from('-NT0001-'), randomBytes(12)])
+  const peerId = req.peerId
 
   const params = [
     `info_hash=${percentEncode(req.infoHash)}`,

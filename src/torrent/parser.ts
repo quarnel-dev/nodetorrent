@@ -25,7 +25,7 @@ export function parseTorrent(raw: RawTorrent): ParsedTorrent {
 
     pieceLength: info['piece length'],
 
-    pieces: splitPiece(Buffer.from(info.pieces)),
+    pieceHashes: splitPiece(Buffer.from(info.pieces)),
 
     rawInfo: validInfo,
   }
