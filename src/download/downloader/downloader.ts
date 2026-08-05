@@ -44,10 +44,12 @@ export async function download(options: DownloaderOptions): Promise<void> {
 
       const peerEvent = connectPeer(peer, options, file, queue)
 
-      peerEvent.on('piece:done', () => {
+      peerEvent.on('piece:done', (index: number) => {
         completed++
         lastProgress = Date.now()
-        emit({ type: 'piece:saved', index: 0, completed, total })
+
+        emit({ type: 'piece:saved', index, completed, total })
+
         if (completed === total) {
           file.close()
           resolve()

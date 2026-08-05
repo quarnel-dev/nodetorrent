@@ -65,7 +65,7 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
       queue.push(index)
     } else {
       file.write(result.piece!, 0, result.piece!.length, index * options.pieceLength)
-      event.emit('piece:done')
+      event.emit('piece:done', index)
     }
 
     currentPieceIndex = undefined

@@ -16,3 +16,7 @@ export type AppEvent =
 export function emit(event: AppEvent) {
   appEvents.emit(event.type, event)
 }
+
+export function onEvent<T extends AppEvent['type']>(type: T, handler: (event: Extract<AppEvent, { type: T }>) => void) {
+  appEvents.on(type, handler)
+}

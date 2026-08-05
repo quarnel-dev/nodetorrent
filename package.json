@@ -12,8 +12,10 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@types/gradient-string": "^1.1.6",
     "bencode": "^4.0.1",
-    "consola": "^3.4.2"
+    "consola": "^3.4.2",
+    "gradient-string": "^3.0.0"
   },
   "devDependencies": {
     "@types/bencode": "^4.0.0",

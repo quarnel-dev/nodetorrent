@@ -1,14 +1,18 @@
 import { createTorrent } from './torrent/index.js'
 import { download } from './download/index.js'
 
+import { showMenu, setupUIListeners } from './ui/index.js'
+
 import { generatePeerId } from './utils/peerId.js'
 
-import { consola } from 'consola'
+import { emit } from './events/index.js'
+
+const { torrentPath, outputDir } = await showMenu()
 
 const peerId = generatePeerId()
-const t = await createTorrent('./test.torrent')
+const t = await createTorrent(torrentPath)
 
-consola.info(`Torrent: ${t.name}`)
+setupUIListeners()
 
 await download({
   announce: t.announce,
@@ -17,7 +21,8 @@ await download({
   pieceHashes: t.pieceHashes,
   pieceLength: t.pieceLength,
   length: t.length,
-  outputPath: `./${t.name}`,
+  outputPath: `${outputDir}/${t.name}`,
 })
 
-consola.success(`Done: ${t.name}`)
+emit({ type: 'download:done', name: t.name })
+
