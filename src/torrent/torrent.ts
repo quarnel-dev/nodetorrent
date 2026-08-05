@@ -12,6 +12,6 @@ export async function createTorrent(path: string): Promise<Torrent> {
   return {
     ...parsed,
 
-    infoHash: createInfoHash(parsed.rawInfo),
+    infoHash: createInfoHash(raw.__rawInfo!),
   }
 }
