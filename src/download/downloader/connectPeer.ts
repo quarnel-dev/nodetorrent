@@ -1,7 +1,6 @@
 import { EventEmitter } from 'node:events'
 
-import { consola } from 'consola'
-
+import { emit } from '../../events/index.js'
 import { createPeer } from '../peer/index.js'
 import { PieceAssembler } from './utils/pieceAssembler.js'
 import { getPieceSize } from './utils/getPieceSize.js'
@@ -18,7 +17,6 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
 
   let currentPieceIndex: number | undefined
   let currentOffset = 0
-
   let peerBitfield: Buffer | null = null
 
   const hasPiece = (index: number): boolean => {
@@ -41,10 +39,10 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
     p.sendRequest(currentPieceIndex, currentOffset, blockLength)
   }
 
-  p.on('connect', () => consola.info(`Connected to ${peer.ip}:${peer.port}`))
+  p.on('connect', () => emit({ type: 'peer:connected', ip: peer.ip, port: peer.port }))
 
   p.on('unchoke', () => {
-    consola.info(`Peer ${peer.ip} unchoked`)
+    emit({ type: 'peer:unchoked', ip: peer.ip })
     requestNextBlock()
   })
 
@@ -63,11 +61,10 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
     }
 
     if (!result.valid) {
-      consola.error(`Hash mismatch for piece ${index}`)
+      emit({ type: 'piece:hash_mismatch', index })
       queue.push(index)
     } else {
       file.write(result.piece!, 0, result.piece!.length, index * options.pieceLength)
-      consola.success(`Piece ${index} saved`)
       event.emit('piece:done')
     }
 
@@ -76,7 +73,7 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
   })
 
   p.on('close', () => {
-    consola.warn(`Disconnected from ${peer.ip}:${peer.port}`)
+    emit({ type: 'peer:disconnected', ip: peer.ip, port: peer.port })
     if (currentPieceIndex !== undefined) {
       queue.push(currentPieceIndex)
       currentPieceIndex = undefined

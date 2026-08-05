@@ -1,6 +1,6 @@
 import { open } from 'node:fs/promises'
-import { consola } from 'consola'
 
+import { emit } from '../../events/index.js'
 import { connectPeer } from './connectPeer.js'
 import { getPeers } from '../../tracker/index.js'
 
@@ -18,7 +18,6 @@ export async function download(options: DownloaderOptions): Promise<void> {
   const connectedPeers = new Set<string>()
 
   let resolve!: () => void
-  let reject!: (e: Error) => void
 
   const fetchAndAdd = async () => {
     try {
@@ -28,10 +27,10 @@ export async function download(options: DownloaderOptions): Promise<void> {
         length: options.length,
         peerId: options.peerId,
       })
-      consola.info(`Peers found: ${peers.length}`)
+      emit({ type: 'peers:found', count: peers.length })
       addPeers(peers)
-    } catch (e) {
-      consola.warn('Failed to get peers, retrying in 10s...')
+    } catch {
+      emit({ type: 'download:retrying', reason: 'Failed to get peers' })
       setTimeout(fetchAndAdd, 10000)
     }
   }
@@ -48,7 +47,7 @@ export async function download(options: DownloaderOptions): Promise<void> {
       peerEvent.on('piece:done', () => {
         completed++
         lastProgress = Date.now()
-        consola.info(`Progress: ${completed}/${total}`)
+        emit({ type: 'piece:saved', index: 0, completed, total })
         if (completed === total) {
           file.close()
           resolve()
@@ -65,7 +64,7 @@ export async function download(options: DownloaderOptions): Promise<void> {
               isRetrying = false
               return
             }
-            consola.warn('All peers disconnected, retrying...')
+            emit({ type: 'download:retrying', reason: 'All peers disconnected' })
             await fetchAndAdd()
             isRetrying = false
           }, 5000)
@@ -76,14 +75,13 @@ export async function download(options: DownloaderOptions): Promise<void> {
 
   await new Promise<void>((_resolve, _reject) => {
     resolve = _resolve
-    reject = _reject
 
     fetchAndAdd()
 
     const refreshInterval = setInterval(
       async () => {
         if (completed >= total) return clearInterval(refreshInterval)
-        consola.info('Refreshing peers...')
+        emit({ type: 'download:retrying', reason: 'Refreshing peers' })
         await fetchAndAdd()
       },
       30 * 60 * 1000
@@ -93,7 +91,7 @@ export async function download(options: DownloaderOptions): Promise<void> {
       if (completed >= total) return clearInterval(watchdog)
       if (Date.now() - lastProgress > 30000 && !isRetrying) {
         isRetrying = true
-        consola.warn('No progress for 30s, forcing reconnect...')
+        emit({ type: 'download:retrying', reason: 'No progress for 30s' })
         connectedPeers.clear()
         activePeers = 0
         await fetchAndAdd()
