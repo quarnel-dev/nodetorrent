@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { connect } from 'node:net'
 
 import { buildHandshake, parseMessages, buildInterested, buildRequest } from './protocol.js'
-import { MSG } from './msg.const.js'
+import { MSG } from './consts/msg.const.js'
 
 export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: Buffer) {
   const socket = connect(port, ip)

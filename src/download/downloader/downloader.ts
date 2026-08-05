@@ -1,8 +1,9 @@
 import { open } from 'node:fs/promises'
 import { consola } from 'consola'
 
-import type { DownloaderOptions } from './types/downloaderOptions.type.js'
 import { connectPeer } from './connectPeer.js'
+
+import type { DownloaderOptions } from './types/downloaderOptions.type.js'
 
 export async function download(options: DownloaderOptions): Promise<void> {
   const file = await open(options.outputPath, 'w')
@@ -14,21 +15,26 @@ export async function download(options: DownloaderOptions): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     for (const peer of options.peers) {
       activePeers++
-      connectPeer(peer, options, file, queue, {
-        onPieceDone: () => {
-          completed++
-          consola.info(`Progress: ${completed}/${total}`)
-          if (completed === total) {
-            file.close()
-            resolve()
-          }
-        },
-        onDisconnect: () => {
-          activePeers--
-          if (activePeers === 0 && completed < total) {
-            reject(new Error(`All peers disconnected, only ${completed}/${total} pieces downloaded`))
-          }
-        },
+      const peerEvent = connectPeer(peer, options, file, queue)
+
+      peerEvent.on('piece:done', () => {
+        completed++
+        consola.info(`Progress: ${completed}/${total}`)
+        if (completed === total) {
+          file.close()
+          resolve()
+        }
+      })
+
+      peerEvent.on('disconnect', () => {
+        activePeers--
+        if (activePeers === 0 && completed < total) {
+          setTimeout(() => {
+            if (completed < total) {
+              reject(new Error(`All peers disconnected: ${completed}/${total}`))
+            }
+          }, 5000)
+        }
       })
     }
   })
