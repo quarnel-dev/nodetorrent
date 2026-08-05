@@ -7,7 +7,12 @@ import type { FileHandle } from 'node:fs/promises'
 import type { DownloaderOptions } from './types/downloaderOptions.type.js'
 import type { Peer } from '../../tracker/index.js'
 
-export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHandle, queue: number[]) {
+interface PeerCallbacks {
+  onPieceDone: () => void
+  onDisconnect: () => void
+}
+
+export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHandle, queue: number[], callbacks: PeerCallbacks) {
   const p = createPeer(peer.ip, peer.port, options.infoHash, options.peerId)
 
   const pieceBuffers = new Map<number, Buffer[]>()
@@ -64,7 +69,8 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
         queue.push(index)
       } else {
         file.write(piece, 0, piece.length, index * options.pieceLength)
-        consola.success(`Piece ${index} collected & saved (${collected}/${pieceSize})`)
+        consola.success(`Piece ${index} saved`)
+        callbacks.onPieceDone()
       }
 
       currentPieceIndex = undefined
@@ -76,6 +82,12 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
   })
 
   p.on('error', (e) => {
-    consola.warn(`Peer ${peer.ip} error: ${e.message}`)
+    consola.warn(`Disconnected from ${peer.ip}:${peer.port}`)
+
+    if (currentPieceIndex !== undefined) {
+      queue.push(currentPieceIndex)
+      currentPieceIndex = undefined
+    }
+    callbacks.onDisconnect()
   })
 }
