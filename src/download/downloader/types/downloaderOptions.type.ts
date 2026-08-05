@@ -1,7 +1,5 @@
-import type { Peer } from '../../../tracker/index.js'
-
 export interface DownloaderOptions {
-  peers: Peer[]
+  announce: string
   infoHash: Buffer
   peerId: Buffer
   pieceHashes: Buffer[]

@@ -1,5 +1,4 @@
 import { createTorrent } from './torrent/index.js'
-import { getPeers } from './tracker/index.js'
 import { download } from './download/index.js'
 
 import { generatePeerId } from './utils/peerId.js'
@@ -11,17 +10,8 @@ const t = await createTorrent('./test.torrent')
 
 consola.info(`Torrent: ${t.name}`)
 
-const peers = await getPeers({
-  announce: t.announce,
-  infoHash: t.infoHash,
-  length: t.length,
-  peerId,
-})
-
-consola.info(`Peers found: ${peers.length}`)
-
 await download({
-  peers,
+  announce: t.announce,
   infoHash: t.infoHash,
   peerId: peerId,
   pieceHashes: t.pieceHashes,

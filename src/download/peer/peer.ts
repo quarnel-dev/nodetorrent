@@ -16,8 +16,6 @@ export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: B
 
     const hs = buildHandshake(infoHash, peerId)
     socket.write(hs)
-
-    socket.write(buildInterested())
   })
 
   socket.on('data', (data: Buffer) => {
@@ -25,9 +23,9 @@ export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: B
 
     if (!handshaked) {
       if (buffer.length < 68) return
-
       handshaked = true
       buffer = buffer.subarray(68)
+      socket.write(buildInterested())
     }
 
     const { messages, rest } = parseMessages(buffer)
@@ -39,7 +37,6 @@ export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: B
       if (message.id === MSG.PIECE) event.emit('piece', message.payload)
     }
   })
-
   socket.on('error', (e) => event.emit('error', e))
   socket.on('close', () => event.emit('close'))
 

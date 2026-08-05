@@ -19,9 +19,19 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
   let currentPieceIndex: number | undefined
   let currentOffset = 0
 
+  let peerBitfield: Buffer | null = null
+
+  const hasPiece = (index: number): boolean => {
+    if (!peerBitfield) return true
+    const byte = Math.floor(index / 8)
+    const bit = 7 - (index % 8)
+    return ((peerBitfield[byte] >> bit) & 1) === 1
+  }
+
   const requestNextBlock = () => {
     if (currentPieceIndex === undefined) {
-      currentPieceIndex = queue.shift()
+      currentPieceIndex = queue.find((i) => hasPiece(i))
+      if (currentPieceIndex !== undefined) queue.splice(queue.indexOf(currentPieceIndex), 1)
       currentOffset = 0
     }
     if (currentPieceIndex === undefined) return
@@ -36,6 +46,10 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
   p.on('unchoke', () => {
     consola.info(`Peer ${peer.ip} unchoked`)
     requestNextBlock()
+  })
+
+  p.on('bitfield', (payload: Buffer) => {
+    peerBitfield = payload
   })
 
   p.on('piece', (payload: Buffer) => {
