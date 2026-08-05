@@ -12,11 +12,11 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@types/bencode": "^4.0.0",
     "bencode": "^4.0.1",
     "consola": "^3.4.2"
   },
   "devDependencies": {
+    "@types/bencode": "^4.0.0",
     "@types/node": "^26.1.2",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2"
