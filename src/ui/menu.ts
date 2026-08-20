@@ -1,4 +1,3 @@
-// src/ui/menu.ts
 import { consola } from 'consola'
 import gradient, { pastel } from 'gradient-string'
 import { readdir, stat } from 'node:fs/promises'

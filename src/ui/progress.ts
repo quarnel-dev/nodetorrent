@@ -14,14 +14,21 @@ export function setupUIListeners() {
     consola.warn(`Disconnected from ${e.ip}:${e.port}`)
   })
 
+  onEvent('peer:unchoked', (e) => {
+    consola.info(`Peer ${e.ip} unchoked us`)
+  })
+
   onEvent('piece:hash_mismatch', (e) => {
     consola.error(`Hash mismatch on piece ${e.index}, dropping data`)
   })
 
   onEvent('piece:saved', (e) => {
     const percent = ((e.completed / e.total) * 100).toFixed(1)
-
     consola.log(`📦 Piece ${e.index} saved. Progress: ${percent}% (${e.completed}/${e.total})`)
+  })
+
+  onEvent('download:retrying', (e) => {
+    consola.warn(`Retrying download... Reason: ${e.reason}`)
   })
 
   onEvent('download:done', (e) => {

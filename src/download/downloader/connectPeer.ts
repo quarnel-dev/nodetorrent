@@ -10,14 +10,40 @@ import type { FileHandle } from 'node:fs/promises'
 import type { DownloaderOptions } from './types/downloaderOptions.type.js'
 import type { Peer } from '../../tracker/index.js'
 
+const MAX_PIPELINE = 10
+const BLOCK_TIMEOUT_MS = 10000
+// хз
+
 export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHandle, queue: number[]): EventEmitter {
   const p = createPeer(peer.ip, peer.port, options.infoHash, options.peerId)
   const event = new EventEmitter()
   const assembler = new PieceAssembler(options.pieceLength, options.length, options.pieceHashes)
 
+  let isCleanedUp = false
+
+  let isChoked = true
+  let peerBitfield: Buffer | null = null
+
   let currentPieceIndex: number | undefined
   let currentOffset = 0
-  let peerBitfield: Buffer | null = null
+  let pendingRequests = 0
+
+  let blockTimeoutNode: NodeJS.Timeout | null = null
+
+  const resetBlockTimeout = () => {
+    if (blockTimeoutNode) clearTimeout(blockTimeoutNode)
+    if (!isChoked && currentPieceIndex !== undefined) {
+      blockTimeoutNode = setTimeout(() => {
+        cleanup('Peer stalled (no data received)')
+      }, BLOCK_TIMEOUT_MS)
+    }
+  }
+
+  const unchokeTimeout = setTimeout(() => {
+    if (isChoked) {
+      cleanup('Peer stayed choked for too long')
+    }
+  }, 12000)
 
   const hasPiece = (index: number): boolean => {
     if (!peerBitfield) return true
@@ -26,24 +52,50 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
     return ((peerBitfield[byte] >> bit) & 1) === 1
   }
 
-  const requestNextBlock = () => {
+  const fillPipeline = () => {
+    if (isChoked) return
+
     if (currentPieceIndex === undefined) {
       currentPieceIndex = queue.find((i) => hasPiece(i))
-      if (currentPieceIndex !== undefined) queue.splice(queue.indexOf(currentPieceIndex), 1)
+      if (currentPieceIndex !== undefined) {
+        queue.splice(queue.indexOf(currentPieceIndex), 1)
+      }
       currentOffset = 0
     }
+
     if (currentPieceIndex === undefined) return
 
     const pieceSize = getPieceSize(currentPieceIndex, options.pieceLength, options.length, options.pieceHashes.length)
-    const blockLength = Math.min(BLOCK_SIZE, pieceSize - currentOffset)
-    p.sendRequest(currentPieceIndex, currentOffset, blockLength)
+
+    while (pendingRequests < MAX_PIPELINE && currentOffset < pieceSize) {
+      const blockLength = Math.min(BLOCK_SIZE, pieceSize - currentOffset)
+      p.sendRequest(currentPieceIndex, currentOffset, blockLength)
+      pendingRequests++
+      currentOffset += blockLength
+    }
+
+    resetBlockTimeout()
   }
 
   p.on('connect', () => emit({ type: 'peer:connected', ip: peer.ip, port: peer.port }))
 
   p.on('unchoke', () => {
+    isChoked = false
+    clearTimeout(unchokeTimeout)
     emit({ type: 'peer:unchoked', ip: peer.ip })
-    requestNextBlock()
+    fillPipeline()
+  })
+
+  p.on('choke', () => {
+    isChoked = true
+    if (blockTimeoutNode) clearTimeout(blockTimeoutNode)
+
+    if (currentPieceIndex !== undefined) {
+      queue.push(currentPieceIndex)
+      currentPieceIndex = undefined
+      currentOffset = 0
+      pendingRequests = 0
+    }
   })
 
   p.on('bitfield', (payload: Buffer) => {
@@ -51,13 +103,17 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
   })
 
   p.on('piece', (payload: Buffer) => {
+    pendingRequests = Math.max(0, pendingRequests - 1)
+
     const index = payload.readUInt32BE(0)
     const data = payload.subarray(8)
     const result = assembler.addBlock(index, data)
 
+    resetBlockTimeout()
+
     if (!result.done) {
-      currentOffset += data.length
-      return requestNextBlock()
+      fillPipeline()
+      return
     }
 
     if (!result.valid) {
@@ -69,19 +125,30 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
     }
 
     currentPieceIndex = undefined
-    requestNextBlock()
+    currentOffset = 0
+    fillPipeline()
   })
 
-  p.on('close', () => {
+  const cleanup = (reason?: string) => {
+    if (isCleanedUp) return
+    isCleanedUp = true
+
+    clearTimeout(unchokeTimeout)
+    if (blockTimeoutNode) clearTimeout(blockTimeoutNode)
+    p.destroy()
+
     emit({ type: 'peer:disconnected', ip: peer.ip, port: peer.port })
+
     if (currentPieceIndex !== undefined) {
       queue.push(currentPieceIndex)
       currentPieceIndex = undefined
     }
-    event.emit('disconnect')
-  })
+    event.emit('disconnect', reason)
+  }
 
-  p.on('error', () => event.emit('disconnect'))
+  event.on('force_disconnect', () => cleanup('Force disconnect'))
+  p.on('close', () => cleanup('Socket close'))
+  p.on('error', () => cleanup('Socket error'))
 
   return event
 }

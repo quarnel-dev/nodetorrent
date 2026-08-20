@@ -13,13 +13,18 @@ export async function download(options: DownloaderOptions): Promise<void> {
   const total = queue.length
   let completed = 0
   let activePeers = 0
-  let isRetrying = false
   let lastProgress = Date.now()
-  const connectedPeers = new Set<string>()
+  let isFetchingPeers = false
+
+  const connectedPeers = new Map<string, { disconnect: () => void }>()
+  const peerCooldown = new Map<string, number>()
 
   let resolve!: () => void
 
   const fetchAndAdd = async () => {
+    if (isFetchingPeers) return
+    isFetchingPeers = true
+
     try {
       const peers = await getPeers({
         announce: options.announce,
@@ -27,22 +32,38 @@ export async function download(options: DownloaderOptions): Promise<void> {
         length: options.length,
         peerId: options.peerId,
       })
-      emit({ type: 'peers:found', count: peers.length })
+
       addPeers(peers)
     } catch {
       emit({ type: 'download:retrying', reason: 'Failed to get peers' })
-      setTimeout(fetchAndAdd, 10000)
+    } finally {
+      isFetchingPeers = false
     }
   }
 
   const addPeers = (peers: Peer[]) => {
+    const now = Date.now()
+    let addedCount = 0
+
     for (const peer of peers) {
       const id = `${peer.ip}:${peer.port}`
+
       if (connectedPeers.has(id)) continue
-      connectedPeers.add(id)
-      activePeers++
+
+      const cooldownUntil = peerCooldown.get(id)
+      if (cooldownUntil && now < cooldownUntil) {
+        continue
+      }
 
       const peerEvent = connectPeer(peer, options, file, queue)
+      activePeers++
+      addedCount++
+
+      connectedPeers.set(id, {
+        disconnect: () => {
+          peerEvent.emit('force_disconnect')
+        },
+      })
 
       peerEvent.on('piece:done', (index: number) => {
         completed++
@@ -56,48 +77,54 @@ export async function download(options: DownloaderOptions): Promise<void> {
         }
       })
 
-      peerEvent.on('disconnect', () => {
+      peerEvent.on('disconnect', (reason?: string) => {
         activePeers--
         connectedPeers.delete(id)
-        if (activePeers === 0 && completed < total && !isRetrying) {
-          isRetrying = true
-          setTimeout(async () => {
-            if (completed >= total) {
-              isRetrying = false
-              return
-            }
-            emit({ type: 'download:retrying', reason: 'All peers disconnected' })
-            await fetchAndAdd()
-            isRetrying = false
-          }, 5000)
+
+        peerCooldown.set(id, Date.now() + 15000)
+
+        if (activePeers === 0 && completed < total) {
+          setTimeout(() => {
+            if (completed < total) fetchAndAdd()
+          }, 3000)
         }
       })
     }
+
+    if (addedCount > 0) {
+      emit({ type: 'peers:found', count: addedCount })
+    }
   }
 
-  await new Promise<void>((_resolve, _reject) => {
+  await new Promise<void>((_resolve) => {
     resolve = _resolve
 
     fetchAndAdd()
 
     const refreshInterval = setInterval(
-      async () => {
+      () => {
         if (completed >= total) return clearInterval(refreshInterval)
-        emit({ type: 'download:retrying', reason: 'Refreshing peers' })
-        await fetchAndAdd()
+        fetchAndAdd()
       },
-      30 * 60 * 1000
+      2 * 60 * 1000
     )
 
-    const watchdog = setInterval(async () => {
+    const watchdog = setInterval(() => {
       if (completed >= total) return clearInterval(watchdog)
-      if (Date.now() - lastProgress > 30000 && !isRetrying) {
-        isRetrying = true
-        emit({ type: 'download:retrying', reason: 'No progress for 30s' })
+
+      if (Date.now() - lastProgress > 25000) {
+        emit({ type: 'download:retrying', reason: 'No progress for 25s' })
+
+        peerCooldown.clear()
+
+        for (const [_, p] of connectedPeers) {
+          p.disconnect()
+        }
         connectedPeers.clear()
         activePeers = 0
-        await fetchAndAdd()
-        isRetrying = false
+
+        lastProgress = Date.now()
+        fetchAndAdd()
       }
     }, 10000)
   })

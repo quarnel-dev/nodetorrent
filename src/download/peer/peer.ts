@@ -11,9 +11,11 @@ export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: B
   let buffer: Buffer = Buffer.alloc(0)
   let handshaked = false
 
+  socket.setTimeout(15000)
+  socket.on('timeout', () => socket.destroy(new Error('Socket timeout')))
+
   socket.on('connect', () => {
     event.emit('connect')
-
     const hs = buildHandshake(infoHash, peerId)
     socket.write(hs)
   })
@@ -32,6 +34,7 @@ export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: B
     buffer = rest
 
     for (const message of messages) {
+      if (message.id === MSG.CHOKE) event.emit('choke')
       if (message.id === MSG.UNCHOKE) event.emit('unchoke')
       if (message.id === MSG.BITFIELD) event.emit('bitfield', message.payload)
       if (message.id === MSG.PIECE) event.emit('piece', message.payload)
@@ -43,5 +46,6 @@ export function createPeer(ip: string, port: number, infoHash: Buffer, peerId: B
   return {
     on: event.on.bind(event),
     sendRequest: (index: number, begin: number, length: number) => socket.write(buildRequest(index, begin, length)),
+    destroy: () => socket.destroy(),
   }
 }
