@@ -39,18 +39,21 @@ export class FileManager {
     for (const file of this.files) {
       if (pieceEnd > file.startOffset && pieceStart < file.endOffset) {
         const bufferOffset = Math.max(0, file.startOffset - pieceStart)
-        const fileOffest = Math.max(0, pieceStart - file.startOffset)
+        const fileOffset = Math.max(0, pieceStart - file.startOffset)
 
-        const bytesToWrite = Math.min(buffer.length - bufferOffset, file.length - fileOffest)
+        const bytesToWrite = Math.min(buffer.length - bufferOffset, file.length - fileOffset)
 
         const chunk = buffer.subarray(bufferOffset, bufferOffset + bytesToWrite)
 
         await fs.mkdir(path.dirname(file.path), { recursive: true })
 
-        const handle = await fs.open(file.path, 'a+')
+        const fileHandleCheck = await fs.open(file.path, 'a')
+        await fileHandleCheck.close()
+
+        const handle = await fs.open(file.path, 'r+')
 
         try {
-          await handle.write(chunk, 0, bytesToWrite, fileOffest)
+          await handle.write(chunk, 0, bytesToWrite, fileOffset)
         } finally {
           await handle.close()
         }
