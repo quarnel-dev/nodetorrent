@@ -1,6 +1,9 @@
+import path from 'node:path'
+
 import type { ParsedTorrent } from './types/parsedTorrent.type.js'
 import type { RawTorrent } from './types/rawTorrent.type.js'
 import type { ValidatedTorrentInfo } from './types/validatedTorrentInfo.type.js'
+import type { SingleFile } from './types/files.types.js'
 
 export function parseTorrent(raw: RawTorrent): ParsedTorrent {
   if (!raw.info) throw new Error('Invalid torrent missing info')
@@ -9,9 +12,32 @@ export function parseTorrent(raw: RawTorrent): ParsedTorrent {
 
   if (!info.name || !info['piece length'] || !info.pieces) throw new Error('Invalid torrent metadata')
 
+  const name = Buffer.from(info.name).toString()
+  const files: SingleFile[] = []
+  let totalLength = 0
+
+  if (info.files && Array.isArray(info.files)) {
+    for (const file of info.files) {
+      const filePath = file.path.map((p) => Buffer.from(p).toString()).join(path.sep)
+      files.push({
+        length: file.length,
+        path: path.join(name, filePath),
+      })
+      totalLength += file.length
+    }
+  } else if (info.length) {
+    files.push({
+      length: info.length,
+      path: name,
+    })
+    totalLength = info.length
+  } else {
+    throw new Error('Torrent has neither length nor files')
+  }
+
   const validInfo: ValidatedTorrentInfo = {
     name: info.name,
-    length: info.length,
+    length: totalLength,
     'piece length': info['piece length'],
     pieces: info.pieces,
   }
@@ -19,13 +45,15 @@ export function parseTorrent(raw: RawTorrent): ParsedTorrent {
   return {
     announce: raw.announce ? Buffer.from(raw.announce).toString() : '',
 
-    name: Buffer.from(info.name).toString(),
+    name,
 
-    length: info.length ?? 0,
+    length: totalLength,
 
     pieceLength: info['piece length'],
 
     pieceHashes: splitPiece(Buffer.from(info.pieces)),
+
+    files,
 
     rawInfo: validInfo,
   }
@@ -33,10 +61,8 @@ export function parseTorrent(raw: RawTorrent): ParsedTorrent {
 
 function splitPiece(pieces: Buffer): Buffer[] {
   const res: Buffer[] = []
-
-  for (let offest = 0; offest < pieces.length; offest += 20) {
-    res.push(pieces.subarray(offest, offest + 20))
+  for (let offset = 0; offset < pieces.length; offset += 20) {
+    res.push(pieces.subarray(offset, offset + 20))
   }
-
   return res
 }

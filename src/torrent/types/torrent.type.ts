@@ -1,4 +1,5 @@
 import type { ValidatedTorrentInfo } from './validatedTorrentInfo.type.js'
+import type { SingleFile } from './files.types.js'
 
 export interface Torrent {
   announce: string
@@ -6,6 +7,7 @@ export interface Torrent {
   length: number
   pieceLength: number
   pieceHashes: Buffer[]
+  files: SingleFile[]
 
   rawInfo: ValidatedTorrentInfo
 

@@ -22,6 +22,7 @@ await download({
   pieceLength: t.pieceLength,
   length: t.length,
   outputPath: `${outputDir}/${t.name}`,
+  files: t.files
 })
 
 emit({ type: 'download:done', name: t.name })

@@ -6,15 +6,15 @@ import { PieceAssembler } from './utils/pieceAssembler.js'
 import { getPieceSize } from './utils/getPieceSize.js'
 import { BLOCK_SIZE } from './consts/blockSize.const.js'
 
-import type { FileHandle } from 'node:fs/promises'
 import type { DownloaderOptions } from './types/downloaderOptions.type.js'
 import type { Peer } from '../../tracker/index.js'
+import type { FileManager } from './utils/fileManager.js'
 
 const MAX_PIPELINE = 10
 const BLOCK_TIMEOUT_MS = 10000
 // хз
 
-export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHandle, queue: number[]): EventEmitter {
+export function connectPeer(peer: Peer, options: DownloaderOptions, fileManager: FileManager, queue: number[]): EventEmitter {
   const p = createPeer(peer.ip, peer.port, options.infoHash, options.peerId)
   const event = new EventEmitter()
   const assembler = new PieceAssembler(options.pieceLength, options.length, options.pieceHashes)
@@ -102,7 +102,7 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
     peerBitfield = payload
   })
 
-  p.on('piece', (payload: Buffer) => {
+  p.on('piece', async (payload: Buffer) => {
     pendingRequests = Math.max(0, pendingRequests - 1)
 
     const index = payload.readUInt32BE(0)
@@ -120,7 +120,7 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, file: FileHa
       emit({ type: 'piece:hash_mismatch', index })
       queue.push(index)
     } else {
-      file.write(result.piece!, 0, result.piece!.length, index * options.pieceLength)
+      await fileManager.writePiece(index, result.piece!)
       event.emit('piece:done', index)
     }
 

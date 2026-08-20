@@ -1,3 +1,5 @@
+import type { SingleFile } from '../../../torrent/types/files.types.js'
+
 export interface DownloaderOptions {
   announce: string
   infoHash: Buffer
@@ -6,4 +8,5 @@ export interface DownloaderOptions {
   pieceLength: number
   length: number
   outputPath: string
+  files: SingleFile[]
 }

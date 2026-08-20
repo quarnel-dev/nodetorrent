@@ -1,14 +1,13 @@
-import { open } from 'node:fs/promises'
-
 import { emit } from '../../events/index.js'
 import { connectPeer } from './connectPeer.js'
 import { getPeers } from '../../tracker/index.js'
+import { FileManager } from './utils/fileManager.js'
 
 import type { Peer } from '../../tracker/index.js'
 import type { DownloaderOptions } from './types/downloaderOptions.type.js'
 
 export async function download(options: DownloaderOptions): Promise<void> {
-  const file = await open(options.outputPath, 'w')
+  const fileManager = new FileManager(options.outputPath, options.files, options.pieceLength)
   const queue = options.pieceHashes.map((_, index) => index)
   const total = queue.length
   let completed = 0
@@ -27,7 +26,7 @@ export async function download(options: DownloaderOptions): Promise<void> {
 
     try {
       const peers = await getPeers({
-        announce: options.announce,
+        announce: options.announce, 
         infoHash: options.infoHash,
         length: options.length,
         peerId: options.peerId,
@@ -55,7 +54,7 @@ export async function download(options: DownloaderOptions): Promise<void> {
         continue
       }
 
-      const peerEvent = connectPeer(peer, options, file, queue)
+      const peerEvent = connectPeer(peer, options, fileManager, queue)
       activePeers++
       addedCount++
 
@@ -72,7 +71,6 @@ export async function download(options: DownloaderOptions): Promise<void> {
         emit({ type: 'piece:saved', index, completed, total })
 
         if (completed === total) {
-          file.close()
           resolve()
         }
       })
