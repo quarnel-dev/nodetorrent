@@ -106,8 +106,10 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, fileManager:
     pendingRequests = Math.max(0, pendingRequests - 1)
 
     const index = payload.readUInt32BE(0)
+    const begin = payload.readUInt32BE(4)
     const data = payload.subarray(8)
-    const result = assembler.addBlock(index, data)
+
+    const result = assembler.addBlock(index, begin, data)
 
     resetBlockTimeout()
 
