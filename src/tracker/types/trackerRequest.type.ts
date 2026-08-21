@@ -3,4 +3,5 @@ export interface TrackerRequest {
   infoHash: Buffer
   length: number
   peerId: Buffer
+  port: number
 }

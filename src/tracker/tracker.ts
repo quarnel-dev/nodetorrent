@@ -18,7 +18,8 @@ const FALLBACK_TRACKERS = [
 ]
 
 export async function getPeers(req: TrackerRequest): Promise<Peer[]> {
-  const trackersToTry = [req.announce, ...FALLBACK_TRACKERS.filter((t) => t !== req.announce)]
+  const primaryTrackers = Array.isArray(req.announce) ? req.announce : [req.announce]
+  const trackersToTry = [...new Set([...primaryTrackers, ...FALLBACK_TRACKERS])].filter(Boolean)
 
   for (const announceUrl of trackersToTry) {
     if (!announceUrl) continue
@@ -33,7 +34,7 @@ export async function getPeers(req: TrackerRequest): Promise<Peer[]> {
         const peers = await getPeersHttp(currentReq)
         if (peers.length > 0) return peers
       }
-    } catch (err) {
+    } catch {
       continue
     }
   }
@@ -43,11 +44,12 @@ export async function getPeers(req: TrackerRequest): Promise<Peer[]> {
 
 async function getPeersHttp(req: TrackerRequest): Promise<Peer[]> {
   const peerId = req.peerId
+  const port = req.port 
 
   const params = [
     `info_hash=${percentEncode(req.infoHash)}`,
     `peer_id=${percentEncode(peerId)}`,
-    `port=6881`,
+    `port=${port}`,
     `uploaded=0`,
     `downloaded=0`,
     `left=${req.length}`,

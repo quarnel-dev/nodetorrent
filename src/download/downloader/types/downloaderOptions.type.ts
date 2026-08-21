@@ -9,4 +9,6 @@ export interface DownloaderOptions {
   length: number
   outputPath: string
   files: SingleFile[]
+  maxPeers: number
+  port: number
 }
