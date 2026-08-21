@@ -12,9 +12,14 @@ import type { FileManager } from './utils/fileManager.js'
 
 const MAX_PIPELINE = 10
 const BLOCK_TIMEOUT_MS = 10000
-// хз
 
-export function connectPeer(peer: Peer, options: DownloaderOptions, fileManager: FileManager, queue: number[]): EventEmitter {
+export function connectPeer(
+  peer: Peer,
+  options: DownloaderOptions,
+  fileManager: FileManager,
+  queue: number[],
+  inProgress: Set<number>
+): EventEmitter {
   const p = createPeer(peer.ip, peer.port, options.infoHash, options.peerId)
   const event = new EventEmitter()
   const assembler = new PieceAssembler(options.pieceLength, options.length, options.pieceHashes)
@@ -48,19 +53,24 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, fileManager:
   const hasPiece = (index: number): boolean => {
     if (!peerBitfield) return true
     const byte = Math.floor(index / 8)
+    if (byte >= peerBitfield.length) return false
     const bit = 7 - (index % 8)
     return ((peerBitfield[byte] >> bit) & 1) === 1
   }
 
   const fillPipeline = () => {
-    if (isChoked) return
+    if (isChoked || isCleanedUp) return
 
     if (currentPieceIndex === undefined) {
-      currentPieceIndex = queue.find((i) => hasPiece(i))
-      if (currentPieceIndex !== undefined) {
-        queue.splice(queue.indexOf(currentPieceIndex), 1)
+
+      const foundIdx = queue.findIndex((i) => !inProgress.has(i) && hasPiece(i))
+
+      if (foundIdx !== -1) {
+        currentPieceIndex = queue[foundIdx]
+        queue.splice(foundIdx, 1) // Удаляем из очереди
+        inProgress.add(currentPieceIndex) // Занимаем кусочек
+        currentOffset = 0
       }
-      currentOffset = 0
     }
 
     if (currentPieceIndex === undefined) return
@@ -91,6 +101,7 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, fileManager:
     if (blockTimeoutNode) clearTimeout(blockTimeoutNode)
 
     if (currentPieceIndex !== undefined) {
+      inProgress.delete(currentPieceIndex)
       queue.push(currentPieceIndex)
       currentPieceIndex = undefined
       currentOffset = 0
@@ -100,6 +111,23 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, fileManager:
 
   p.on('bitfield', (payload: Buffer) => {
     peerBitfield = payload
+  })
+
+  p.on('have', (payload: Buffer) => {
+    const pieceIndex = payload.readUInt32BE(0)
+    if (!peerBitfield) {
+      const bitfieldSize = Math.ceil(options.pieceHashes.length / 8)
+      peerBitfield = Buffer.alloc(bitfieldSize)
+    }
+    const byte = Math.floor(pieceIndex / 8)
+    const bit = 7 - (pieceIndex % 8)
+    if (byte < peerBitfield.length) {
+      peerBitfield[byte] |= 1 << bit
+    }
+
+    if (currentPieceIndex === undefined) {
+      fillPipeline()
+    }
   })
 
   p.on('piece', async (payload: Buffer) => {
@@ -118,9 +146,11 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, fileManager:
       return
     }
 
+    inProgress.delete(index)
+
     if (!result.valid) {
       emit({ type: 'piece:hash_mismatch', index })
-      queue.push(index)
+      queue.push(index) // На перекачку
     } else {
       await fileManager.writePiece(index, result.piece!)
       event.emit('piece:done', index)
@@ -142,6 +172,7 @@ export function connectPeer(peer: Peer, options: DownloaderOptions, fileManager:
     emit({ type: 'peer:disconnected', ip: peer.ip, port: peer.port })
 
     if (currentPieceIndex !== undefined) {
+      inProgress.delete(currentPieceIndex)
       queue.push(currentPieceIndex)
       currentPieceIndex = undefined
     }

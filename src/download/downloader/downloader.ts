@@ -6,9 +6,14 @@ import { FileManager } from './utils/fileManager.js'
 import type { Peer } from '../../tracker/index.js'
 import type { DownloaderOptions } from './types/downloaderOptions.type.js'
 
+const MAX_ACTIVE_PEERS = 15
+
 export async function download(options: DownloaderOptions): Promise<void> {
   const fileManager = new FileManager(options.outputPath, options.files, options.pieceLength)
-  const queue = options.pieceHashes.map((_, index) => index)
+  const queue: number[] = options.pieceHashes.map((_, index) => index)
+
+  const inProgress = new Set<number>()
+
   const total = queue.length
   let completed = 0
   let activePeers = 0
@@ -21,12 +26,12 @@ export async function download(options: DownloaderOptions): Promise<void> {
   let resolve!: () => void
 
   const fetchAndAdd = async () => {
-    if (isFetchingPeers) return
+    if (isFetchingPeers || activePeers >= MAX_ACTIVE_PEERS) return
     isFetchingPeers = true
 
     try {
       const peers = await getPeers({
-        announce: options.announce, 
+        announce: options.announce,
         infoHash: options.infoHash,
         length: options.length,
         peerId: options.peerId,
@@ -45,6 +50,8 @@ export async function download(options: DownloaderOptions): Promise<void> {
     let addedCount = 0
 
     for (const peer of peers) {
+      if (activePeers >= MAX_ACTIVE_PEERS) break
+
       const id = `${peer.ip}:${peer.port}`
 
       if (connectedPeers.has(id)) continue
@@ -54,7 +61,7 @@ export async function download(options: DownloaderOptions): Promise<void> {
         continue
       }
 
-      const peerEvent = connectPeer(peer, options, fileManager, queue)
+      const peerEvent = connectPeer(peer, options, fileManager, queue, inProgress)
       activePeers++
       addedCount++
 
@@ -71,20 +78,22 @@ export async function download(options: DownloaderOptions): Promise<void> {
         emit({ type: 'piece:saved', index, completed, total })
 
         if (completed === total) {
+          // Завершаем скачивание
+          for (const [_, p] of connectedPeers) {
+            p.disconnect()
+          }
           resolve()
         }
       })
 
-      peerEvent.on('disconnect', (reason?: string) => {
+      peerEvent.on('disconnect', () => {
         activePeers--
         connectedPeers.delete(id)
 
         peerCooldown.set(id, Date.now() + 15000)
 
-        if (activePeers === 0 && completed < total) {
-          setTimeout(() => {
-            if (completed < total) fetchAndAdd()
-          }, 3000)
+        if (activePeers < MAX_ACTIVE_PEERS && completed < total) {
+          fetchAndAdd()
         }
       })
     }
@@ -99,19 +108,16 @@ export async function download(options: DownloaderOptions): Promise<void> {
 
     fetchAndAdd()
 
-    const refreshInterval = setInterval(
-      () => {
-        if (completed >= total) return clearInterval(refreshInterval)
-        fetchAndAdd()
-      },
-      2 * 60 * 1000
-    )
+    const refreshInterval = setInterval(() => {
+      if (completed >= total) return clearInterval(refreshInterval)
+      if (activePeers < MAX_ACTIVE_PEERS) fetchAndAdd()
+    }, 60 * 1000)
 
     const watchdog = setInterval(() => {
       if (completed >= total) return clearInterval(watchdog)
 
-      if (Date.now() - lastProgress > 25000) {
-        emit({ type: 'download:retrying', reason: 'No progress for 25s' })
+      if (Date.now() - lastProgress > 30000 && completed < total) {
+        emit({ type: 'download:retrying', reason: 'No progress for 30s' })
 
         peerCooldown.clear()
 
