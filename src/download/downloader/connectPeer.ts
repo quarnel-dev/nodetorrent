@@ -61,14 +61,26 @@ export function connectPeer(
   const fillPipeline = () => {
     if (isChoked || isCleanedUp) return
 
-    if (currentPieceIndex === undefined) {
+    const remainingPiecesCount = queue.length + inProgress.size
+    const isEndgame = remainingPiecesCount <= 3 && remainingPiecesCount > 0
 
-      const foundIdx = queue.findIndex((i) => !inProgress.has(i) && hasPiece(i))
+    if (currentPieceIndex === undefined) {
+      let foundIdx = -1
+
+      if (isEndgame) {
+        foundIdx = queue.findIndex((i) => hasPiece(i))
+      } else {
+        foundIdx = queue.findIndex((i) => !inProgress.has(i) && hasPiece(i))
+      }
 
       if (foundIdx !== -1) {
         currentPieceIndex = queue[foundIdx]
-        queue.splice(foundIdx, 1) // Удаляем из очереди
-        inProgress.add(currentPieceIndex) // Занимаем кусочек
+
+        if (!isEndgame) {
+          queue.splice(foundIdx, 1)
+        }
+
+        inProgress.add(currentPieceIndex)
         currentOffset = 0
       }
     }
@@ -102,7 +114,11 @@ export function connectPeer(
 
     if (currentPieceIndex !== undefined) {
       inProgress.delete(currentPieceIndex)
-      queue.push(currentPieceIndex)
+
+      if (!queue.includes(currentPieceIndex)) {
+        queue.push(currentPieceIndex)
+      }
+
       currentPieceIndex = undefined
       currentOffset = 0
       pendingRequests = 0
@@ -137,6 +153,13 @@ export function connectPeer(
     const begin = payload.readUInt32BE(4)
     const data = payload.subarray(8)
 
+    if (!inProgress.has(index) && currentPieceIndex === index) {
+      currentPieceIndex = undefined
+      currentOffset = 0
+      fillPipeline()
+      return
+    }
+
     const result = assembler.addBlock(index, begin, data)
 
     resetBlockTimeout()
@@ -148,9 +171,16 @@ export function connectPeer(
 
     inProgress.delete(index)
 
+    const qIdx = queue.indexOf(index)
+    if (qIdx !== -1) {
+      queue.splice(qIdx, 1)
+    }
+
     if (!result.valid) {
       emit({ type: 'piece:hash_mismatch', index })
-      queue.push(index) // На перекачку
+      if (!queue.includes(index)) {
+        queue.push(index) // На перекачку
+      }
     } else {
       await fileManager.writePiece(index, result.piece!)
       event.emit('piece:done', index)
@@ -173,7 +203,9 @@ export function connectPeer(
 
     if (currentPieceIndex !== undefined) {
       inProgress.delete(currentPieceIndex)
-      queue.push(currentPieceIndex)
+      if (!queue.includes(currentPieceIndex)) {
+        queue.push(currentPieceIndex)
+      }
       currentPieceIndex = undefined
     }
     event.emit('disconnect', reason)
