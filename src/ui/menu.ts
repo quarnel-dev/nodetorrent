@@ -3,7 +3,7 @@ import gradient, { pastel } from 'gradient-string'
 import { readdir, stat, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const VERSION = '1.0.0'
+const VERSION = '0.1.0'
 const HISTORY_FILE = './history.json'
 
 const ASCII = `
