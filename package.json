@@ -13,7 +13,6 @@
     "typecheck": "tsc --noEmit --watch"
   },
   "dependencies": {
-    "@types/gradient-string": "^1.1.6",
     "bencode": "^4.0.1",
     "consola": "^3.4.2",
     "gradient-string": "^3.0.0"
@@ -22,6 +21,7 @@
     "@types/bencode": "^4.0.0",
     "@types/node": "^26.1.2",
     "tsx": "^4.23.1",
+    "@types/gradient-string": "^1.1.6",
     "typescript": "^7.0.2"
   }
 }
