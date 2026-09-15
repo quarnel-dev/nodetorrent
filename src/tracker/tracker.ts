@@ -21,25 +21,27 @@ export async function getPeers(req: TrackerRequest): Promise<Peer[]> {
   const primaryTrackers = req.announceList ?? (req.announce ? [req.announce] : [])
   const trackersToTry = [...new Set([...primaryTrackers, ...FALLBACK_TRACKERS])].filter(Boolean)
 
-  for (const announceUrl of trackersToTry) {
-    if (!announceUrl) continue
+  const results = await Promise.allSettled(
+    trackersToTry.map(async (url) => {
+      const currentReq = { ...req, announce: url }
+      if (url.startsWith('udp:')) return getPeersUdp(currentReq as any)
+      if (url.startsWith('http:') || url.startsWith('https:')) return getPeersHttp(currentReq as any)
+      return []
+    })
+  )
 
-    try {
-      const currentReq = { ...req, announce: announceUrl }
-
-      if (announceUrl.startsWith('udp:')) {
-        const peers = await getPeersUdp(currentReq as TrackerRequest & { announce: string })
-        if (peers.length > 0) return peers
-      } else if (announceUrl.startsWith('http:') || announceUrl.startsWith('https:')) {
-        const peers = await getPeersHttp(currentReq as TrackerRequest & { announce: string })
-        if (peers.length > 0) return peers
-      }
-    } catch {
-      continue
+  const allPeers: Peer[] = []
+  for (const res of results) {
+    if (res.status === 'fulfilled' && res.value) {
+      allPeers.push(...res.value)
     }
   }
 
-  throw new Error('Failed to get peers from all available trackers')
+  const unique = new Map<string, Peer>()
+  for (const p of allPeers) unique.set(`${p.ip}:${p.port}`, p)
+
+  if (unique.size === 0) throw new Error('Failed to get peers from all trackers')
+  return Array.from(unique.values())
 }
 
 async function getPeersHttp(req: TrackerRequest & { announce: string }): Promise<Peer[]> {
