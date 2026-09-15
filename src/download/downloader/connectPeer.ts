@@ -51,7 +51,7 @@ export function connectPeer(
   }, 12000)
 
   const hasPiece = (index: number): boolean => {
-    if (!peerBitfield) return true
+    if (!peerBitfield) return false
     const byte = Math.floor(index / 8)
     if (byte >= peerBitfield.length) return false
     const bit = 7 - (index % 8)
