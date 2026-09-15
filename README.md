@@ -1,5 +1,7 @@
 # NodeTorrent
 
+[Read in Russian](README.ru.md) | English
+
 ![NodeTorrent CLI Demo](assets/demo.gif)
 
 A lightweight, minimal-dependency BitTorrent CLI client built from scratch with Node.js and TypeScript.
