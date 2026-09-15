@@ -1,7 +1,7 @@
 import type { SingleFile } from '../../../torrent/types/files.types.js'
 
 export interface DownloaderOptions {
-  announce: string
+  announceList: string[]
   infoHash: Buffer
   peerId: Buffer
   pieceHashes: Buffer[]

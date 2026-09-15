@@ -2,7 +2,7 @@ import type { ValidatedTorrentInfo } from './validatedTorrentInfo.type.js'
 import type { SingleFile } from './files.types.js'
 
 export interface Torrent {
-  announce: string
+  announceList: string[]
   name: string
   length: number
   pieceLength: number

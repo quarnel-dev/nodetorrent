@@ -1,5 +1,6 @@
 export interface TrackerRequest {
-  announce: string
+  announceList?: string[]
+  announce?: string
   infoHash: Buffer
   length: number
   peerId: Buffer

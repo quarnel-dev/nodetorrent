@@ -33,7 +33,7 @@ export async function download(options: DownloaderOptions): Promise<void> {
 
     try {
       const peers = await getPeers({
-        announce: options.announce,
+        announceList: options.announceList,
         infoHash: options.infoHash,
         length: options.length,
         peerId: options.peerId,

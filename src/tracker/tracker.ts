@@ -18,7 +18,7 @@ const FALLBACK_TRACKERS = [
 ]
 
 export async function getPeers(req: TrackerRequest): Promise<Peer[]> {
-  const primaryTrackers = Array.isArray(req.announce) ? req.announce : [req.announce]
+  const primaryTrackers = req.announceList ?? (req.announce ? [req.announce] : [])
   const trackersToTry = [...new Set([...primaryTrackers, ...FALLBACK_TRACKERS])].filter(Boolean)
 
   for (const announceUrl of trackersToTry) {
@@ -28,10 +28,10 @@ export async function getPeers(req: TrackerRequest): Promise<Peer[]> {
       const currentReq = { ...req, announce: announceUrl }
 
       if (announceUrl.startsWith('udp:')) {
-        const peers = await getPeersUdp(currentReq)
+        const peers = await getPeersUdp(currentReq as TrackerRequest & { announce: string })
         if (peers.length > 0) return peers
       } else if (announceUrl.startsWith('http:') || announceUrl.startsWith('https:')) {
-        const peers = await getPeersHttp(currentReq)
+        const peers = await getPeersHttp(currentReq as TrackerRequest & { announce: string })
         if (peers.length > 0) return peers
       }
     } catch {
@@ -42,9 +42,9 @@ export async function getPeers(req: TrackerRequest): Promise<Peer[]> {
   throw new Error('Failed to get peers from all available trackers')
 }
 
-async function getPeersHttp(req: TrackerRequest): Promise<Peer[]> {
+async function getPeersHttp(req: TrackerRequest & { announce: string }): Promise<Peer[]> {
   const peerId = req.peerId
-  const port = req.port 
+  const port = req.port
 
   const params = [
     `info_hash=${percentEncode(req.infoHash)}`,

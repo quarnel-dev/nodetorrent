@@ -19,7 +19,7 @@ const dashboard = new Dashboard(t.pieceHashes.length, t.pieceLength)
 
 try {
   await download({
-    announce: t.announce,
+    announceList: t.announceList,
     infoHash: t.infoHash,
     peerId: peerId,
     pieceHashes: t.pieceHashes,

@@ -9,6 +9,23 @@ export function parseTorrent(raw: RawTorrent): ParsedTorrent {
   if (!raw.info) throw new Error('Invalid torrent missing info')
 
   const info = raw.info
+  const announceList: string[] = []
+
+  if (raw.announce) {
+    announceList.push(Buffer.from(raw.announce).toString())
+  }
+
+  if (Array.isArray(raw['announce-list'])) {
+    for (const tier of raw['announce-list']) {
+      if (Array.isArray(tier)) {
+        for (const tracker of tier) {
+          announceList.push(Buffer.from(tracker).toString())
+        }
+      }
+    }
+  }
+
+  const uniqueAnnounces = [...new Set(announceList)]
 
   if (!info.name || !info['piece length'] || !info.pieces) throw new Error('Invalid torrent metadata')
 
@@ -43,7 +60,7 @@ export function parseTorrent(raw: RawTorrent): ParsedTorrent {
   }
 
   return {
-    announce: raw.announce ? Buffer.from(raw.announce).toString() : '',
+    announceList:  uniqueAnnounces,
 
     name,
 

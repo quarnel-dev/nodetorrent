@@ -9,7 +9,7 @@ const ACTION_CONNECT = 0
 const ACTION_ANNOUNCE = 1
 const PROTOCOL_ID = 0x41727101980n
 
-export function getPeersUdp(req: TrackerRequest): Promise<Peer[]> {
+export function getPeersUdp(req: TrackerRequest & { announce: string }): Promise<Peer[]> {
   return new Promise((resolve, reject) => {
     const url = new URL(req.announce)
     const port = Number.parseInt(url.port, 10) || 80
