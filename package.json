@@ -1,6 +1,6 @@
 {
   "name": "nodetorrent",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Minimal BitTorrent client implementation in TypeScript without protocol dependencies",
   "license": "MIT",
   "author": "Quarnel",
