@@ -80,8 +80,8 @@ export function getPeersUdp(req: TrackerRequest & { announce: string }): Promise
         announceReq.writeUInt32BE(0, 84)
         // Key (4 byte)
         announceReq.writeUInt32BE(0, 88)
-        // Num want: -1 (default) (4 byte)
-        announceReq.writeInt32BE(-1, 92)
+        // Num want: 200 (default) (4 byte)
+        announceReq.writeInt32BE(200, 92)
         // Port (2 byte)
         announceReq.writeUInt16BE(req.port || 6881, 96)
 
