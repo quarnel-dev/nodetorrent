@@ -83,7 +83,7 @@ export function getPeersUdp(req: TrackerRequest): Promise<Peer[]> {
         // Num want: -1 (default) (4 byte)
         announceReq.writeInt32BE(-1, 92)
         // Port (2 byte)
-        announceReq.writeUInt16BE(6881, 96)
+        announceReq.writeUInt16BE(req.port || 6881, 96)
 
         socket.send(announceReq, port, host)
       } else if (action === ACTION_ANNOUNCE) {
